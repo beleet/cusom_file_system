@@ -5,4 +5,5 @@ set(CMAKE_C_STANDARD 11)
 
 add_executable(custom_file_system
         test.c
-        userfs.c)
+        userfs.c
+)
