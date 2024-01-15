@@ -186,7 +186,18 @@ ufs_read(int fd, char *buf, size_t size)
 int
 ufs_close(int fd)
 {
+    if (fd < 0 || fd >= file_descriptor_capacity) {
+        ufs_error_code = UFS_ERR_NO_FILE;
+        return -1;
+    }
+
+    if (file_descriptors[fd] == NULL) {
+        ufs_error_code = UFS_ERR_NO_FILE;
+        return -1;
+    }
+
     file_descriptors[fd] = NULL;
+
     return 0;
 }
 
@@ -203,11 +214,10 @@ ufs_delete(const char *filename)
     if (temp == NULL)
         return -1;
 
-    if (prev == NULL) {
+    if (prev == NULL)
         file_list = temp->next;
-    } else {
+    else
         prev->next = temp->next;
-    }
 
     free(temp);
 
