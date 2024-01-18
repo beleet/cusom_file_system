@@ -2,6 +2,8 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
+
 
 enum {
     BLOCK_SIZE = 512,
@@ -48,6 +50,7 @@ static struct file *file_list = NULL;
 
 struct filedesc {
     struct file *file;
+    size_t current_position;
 
     /* PUT HERE OTHER MEMBERS */
 };
@@ -70,6 +73,7 @@ ufs_errno()
 
 // Searching file by the file name
 struct file* search_file(const char* file_name) {
+
     struct file* current_file = file_list;
 
     while (current_file != NULL) {
@@ -83,9 +87,12 @@ struct file* search_file(const char* file_name) {
 
 int create_file_descriptor(struct file *file) {
 
+    file->refs++;
+
     struct filedesc *new_file_descriptor = (struct filedesc*) calloc(1, sizeof(struct filedesc));
 
     new_file_descriptor->file = file;
+    new_file_descriptor->current_position = 0;
 
     //  Initialize the file_descriptors array if its empty
     if (file_descriptor_capacity == 0) {
@@ -119,7 +126,11 @@ int create_file_descriptor(struct file *file) {
 struct file *create_file(const char *filename) {
 
     struct file *new_file = (struct file*) calloc(1, sizeof(struct file));
+
     new_file->name = (char *) filename;
+    new_file->block_list = NULL;
+    new_file->last_block = NULL;
+    new_file->refs = 0;
 
     if (file_list == NULL)
         file_list = new_file;
@@ -164,23 +175,111 @@ ufs_open(const char *filename, int flags)
 ssize_t
 ufs_write(int fd, const char *buf, size_t size)
 {
-    /* IMPLEMENT THIS FUNCTION */
-    (void)fd;
-    (void)buf;
-    (void)size;
-    ufs_error_code = UFS_ERR_NOT_IMPLEMENTED;
-    return -1;
+    if (fd < 0 || fd >= file_descriptor_capacity) {
+        ufs_error_code = UFS_ERR_NO_FILE;
+        return -1;
+    }
+
+    if (file_descriptors[fd] == NULL) {
+        ufs_error_code = UFS_ERR_NO_FILE;
+        return -1;
+    }
+
+    struct filedesc *current_file_descriptor = file_descriptors[fd];
+    struct file *current_file = current_file_descriptor->file;
+
+    size_t remaining_size = size;
+    size_t offset = current_file_descriptor->current_position;
+
+    printf("WRITE POSITION FOR %s: %d ", buf, offset);
+    current_file_descriptor->current_position = (current_file_descriptor->current_position + size) % BLOCK_SIZE;
+
+
+    while (remaining_size > 0) {
+
+        //  Check if file is empty
+        if (current_file->block_list == NULL) {
+            // TODO: проверить на максимальный размер файла
+
+            struct block *new_block = (struct block*) calloc(1, sizeof(struct block));
+            new_block->memory = (char *) calloc(BLOCK_SIZE, sizeof(char));
+
+            current_file->block_list = new_block;
+            current_file->block_list->next = NULL;
+            current_file->last_block = current_file->block_list;
+        }
+
+        size_t write_size = (remaining_size > BLOCK_SIZE - offset) ? (BLOCK_SIZE - offset) : remaining_size;
+
+        memcpy(current_file->last_block->memory + offset, buf + size - remaining_size, write_size);
+
+        remaining_size -= write_size;
+        offset += write_size;
+
+        if (offset == BLOCK_SIZE) {
+            offset = 0;
+            if (current_file->last_block->next == NULL) {
+                current_file->last_block->next = (struct block*) calloc(1, sizeof(struct block));
+                current_file->last_block->next->next = NULL;
+            }
+            current_file->last_block = current_file->last_block->next;
+        }
+    }
+
+    current_file->last_block->occupied = (int) size % BLOCK_SIZE;
+
+    printf("AFTER: %d\n", current_file_descriptor->current_position);
+
+    return size;
 }
 
 ssize_t
 ufs_read(int fd, char *buf, size_t size)
 {
-    /* IMPLEMENT THIS FUNCTION */
-    (void)fd;
-    (void)buf;
-    (void)size;
-    ufs_error_code = UFS_ERR_NOT_IMPLEMENTED;
-    return -1;
+    if (fd < 0 || fd >= file_descriptor_capacity) {
+        ufs_error_code = UFS_ERR_NO_FILE;
+        return -1;
+    }
+
+    if (file_descriptors[fd] == NULL) {
+        ufs_error_code = UFS_ERR_NO_FILE;
+        return -1;
+    }
+
+    struct filedesc *current_file_descriptor = file_descriptors[fd];
+    struct file *current_file = current_file_descriptor->file;
+    struct block *iterator = current_file->block_list;
+
+    size_t remaining_size = size;
+    size_t offset = current_file_descriptor->current_position;
+
+    printf("\nBUFFER B4: %s\n", buf);
+    printf("READ POSITION: %d ", offset);
+
+    while (remaining_size > 0 && iterator != NULL) {
+        // Сколько байт мы можем прочитать из текущего блока
+        size_t read_size = (remaining_size > BLOCK_SIZE - offset) ? (BLOCK_SIZE - offset) : remaining_size;
+        printf("\nREAD SIZE: %d\n", read_size);
+        // Копируем данные из блока файла в buf
+        memcpy(buf + size - remaining_size, iterator->memory + offset, read_size);
+
+        // Обновляем оставшийся размер данных и смещение
+        remaining_size -= read_size;
+        offset += read_size;
+
+        // Если текущий блок полностью прочитан, переходим к следующему блоку
+        if (offset == BLOCK_SIZE) {
+            offset = 0;
+            iterator = iterator->next;
+        }
+    }
+
+    printf("occupied: %d, current position: %d, offset: %d\n", current_file->last_block->occupied, current_file_descriptor->current_position, offset);
+
+    current_file_descriptor->current_position = (current_file_descriptor->current_position + current_file->last_block->occupied) % BLOCK_SIZE;
+
+    printf("AFTER: %d, GOT: %s\n\n", current_file_descriptor->current_position, buf);
+    return current_file->last_block->occupied;
 }
 
 int
@@ -196,6 +295,7 @@ ufs_close(int fd)
         return -1;
     }
 
+    file_descriptors[fd]->file->refs--;
     file_descriptors[fd] = NULL;
 
     return 0;
@@ -204,6 +304,14 @@ ufs_close(int fd)
 int
 ufs_delete(const char *filename)
 {
+    struct file *desired_file = search_file(filename);
+
+    if (desired_file == NULL)
+        return -1;
+
+    if (desired_file->refs != 0)
+        return -1;
+
     struct file *temp = file_list, *prev = NULL;
 
     while (temp != NULL && temp->name != filename) {
