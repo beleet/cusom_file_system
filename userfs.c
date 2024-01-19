@@ -191,9 +191,7 @@ ufs_write(int fd, const char *buf, size_t size)
     size_t remaining_size = size;
     size_t offset = current_file_descriptor->current_position;
 
-    printf("WRITE POSITION FOR %s: %d ", buf, offset);
-    current_file_descriptor->current_position = (current_file_descriptor->current_position + size) % BLOCK_SIZE;
-
+//    current_file_descriptor->current_position = (current_file_descriptor->current_position + size) % BLOCK_SIZE;
 
     while (remaining_size > 0) {
 
@@ -226,9 +224,19 @@ ufs_write(int fd, const char *buf, size_t size)
         }
     }
 
-    current_file->last_block->occupied = (int) size % BLOCK_SIZE;
 
-    printf("AFTER: %d\n", current_file_descriptor->current_position);
+//    current_file->last_block->occupied = (() + current_file->last_block->occupied) % BLOCK_SIZE;
+
+    if (current_file->last_block->occupied < current_file_descriptor->current_position + size)
+        current_file->last_block->occupied = current_file_descriptor->current_position + size;
+
+//
+//    printf("\nbuffer: %s\n", buf);
+//    printf("current position before: %d\n", current_file_descriptor->current_position);
+    current_file_descriptor->current_position = current_file_descriptor->current_position + size;
+//    printf("current position after: %d\n", current_file_descriptor->current_position);
+//    printf("occupied after: %d\n\n", current_file->last_block->occupied);
+//
 
     return size;
 }
@@ -253,13 +261,12 @@ ufs_read(int fd, char *buf, size_t size)
     size_t remaining_size = size;
     size_t offset = current_file_descriptor->current_position;
 
-    printf("\nBUFFER B4: %s\n", buf);
-    printf("READ POSITION: %d ", offset);
+//    printf("\noccupied: %d\n", current_file->last_block->occupied);
+//    printf("before read: %d, ", current_file_descriptor->current_position);
 
     while (remaining_size > 0 && iterator != NULL) {
         // Сколько байт мы можем прочитать из текущего блока
         size_t read_size = (remaining_size > BLOCK_SIZE - offset) ? (BLOCK_SIZE - offset) : remaining_size;
-        printf("\nREAD SIZE: %d\n", read_size);
         // Копируем данные из блока файла в buf
         memcpy(buf + size - remaining_size, iterator->memory + offset, read_size);
 
@@ -274,12 +281,24 @@ ufs_read(int fd, char *buf, size_t size)
         }
     }
 
-    printf("occupied: %d, current position: %d, offset: %d\n", current_file->last_block->occupied, current_file_descriptor->current_position, offset);
+    size_t prev_position = current_file_descriptor->current_position;
 
-    current_file_descriptor->current_position = (current_file_descriptor->current_position + current_file->last_block->occupied) % BLOCK_SIZE;
+//    printf("\ncurrent position before: %d\n", current_file_descriptor->current_position);
 
-    printf("AFTER: %d, GOT: %s\n\n", current_file_descriptor->current_position, buf);
-    return current_file->last_block->occupied;
+    if (size < current_file->last_block->occupied - prev_position) {
+        current_file_descriptor->current_position += size;
+//        printf("\ncurrent position before: %d\n\n", current_file_descriptor->current_position);
+        return size;
+    }
+
+    current_file_descriptor->current_position = current_file->last_block->occupied;
+//    printf("current position after: %d\n\n", current_file_descriptor->current_position);
+
+    return current_file->last_block->occupied - prev_position;
+
+//    return (current_file_descriptor->current_position - prev_position == 0) ?
+//        current_file->last_block->occupied - prev_position :
+//        current_file_descriptor->current_position - prev_position;
 }
 
 int

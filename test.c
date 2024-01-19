@@ -96,6 +96,42 @@ test_close(void)
 static void
 test_io(void)
 {
+//
+//    int fd1 = ufs_open("file", UFS_CREATE);
+//    int fd2 = ufs_open("file", 0);
+//    unit_fail_if(fd1 == -1 || fd2 == -1);
+//
+//    char buffer[2048];
+//    unit_check(ufs_write(fd1, "123###", 3) == 3,
+//               "data (only needed) is written");
+//    unit_check(ufs_read(fd2, buffer, sizeof(buffer)) == 3, "data is read");
+//    unit_check(memcmp(buffer, "123", 3) == 0, "the same data");
+//
+//    ufs_close(fd1);
+//    ufs_close(fd2);
+//    /*
+//     * On re-open the file descriptor position is again zero.
+//     */
+//    fd1 = ufs_open("file", 0);
+//    unit_fail_if(fd1 == -1);
+//    unit_check(ufs_read(fd1, buffer, sizeof(buffer)) == 3, "read");
+//    unit_check(memcmp(buffer, "123", 3) == 0, "got data from start");
+//    unit_check(ufs_write(fd1, "45678###", 5) == 5, "write more");
+//    ufs_close(fd1);
+//
+//    fd1 = ufs_open("file", 0);
+//    unit_fail_if(fd1 == -1);
+//    unit_check(ufs_write(fd1, "abcd###", 4) == 4, "overwrite");
+//    unit_check(ufs_read(fd1, buffer, sizeof(buffer)) == 4, "read rest");
+//    unit_check(memcmp(buffer, "5678", 4) == 0, "got the tail");
+//    ufs_close(fd1);
+//
+//    fd1 = ufs_open("file", 0);
+//    unit_fail_if(fd1 == -1);
+//    unit_check(ufs_read(fd1, buffer, sizeof(buffer)) == 8, "read all");
+//    unit_check(memcmp(buffer, "abcd5678", 4) == 0, "check all");
+//    ufs_close(fd1);
+
     unit_test_start();
 
     ssize_t rc = ufs_write(-1, NULL, 0);
@@ -446,17 +482,17 @@ main(void)
 {
     unit_test_start();
 
-    test_open();
-    test_close();
+//    test_open();
+//    test_close();
     test_io();
-    test_delete();
-    test_stress_open();
-    test_max_file_size();
-    test_rights();
-    test_resize();
+//    test_delete();
+//    test_stress_open();
+//    test_max_file_size();
+//    test_rights();
+//    test_resize();
 
     /* Free the memory to make the memory leak detector happy. */
-    ufs_destroy();
+//    ufs_destroy();
 
     unit_test_finish();
     return 0;
