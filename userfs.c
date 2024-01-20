@@ -71,8 +71,9 @@ ufs_errno()
     return ufs_error_code;
 }
 
-// Searching file by the file name
+
 struct file* search_file(const char* file_name) {
+    // Searching file by the file name
 
     struct file* current_file = file_list;
 
@@ -87,6 +88,7 @@ struct file* search_file(const char* file_name) {
 
 int create_file_descriptor(struct file *file) {
 
+    // Function for file descriptor creation
     file->refs++;
 
     struct filedesc *new_file_descriptor = (struct filedesc*) calloc(1, sizeof(struct filedesc));
@@ -125,23 +127,22 @@ int create_file_descriptor(struct file *file) {
 
 struct file *create_file(const char *filename) {
 
+    //  Function for file creation
     struct file *new_file = (struct file*) calloc(1, sizeof(struct file));
 
+    //  Initialize fields
     new_file->name = (char *) filename;
     new_file->block_list = NULL;
     new_file->last_block = NULL;
     new_file->refs = 0;
 
+    //  Append file into linked list of files
     if (file_list == NULL)
         file_list = new_file;
 
     else {
-        struct file *index_file = file_list;
-
-        while (index_file->next != NULL)
-            index_file = index_file->next;
-
-        index_file = new_file;
+        new_file->next = file_list;
+        file_list = new_file;
     }
 
     return new_file;
@@ -232,19 +233,20 @@ ufs_write(int fd, const char *buf, size_t size)
         current_file->last_block->occupied = (current_file_descriptor->current_position + size) % BLOCK_SIZE;
 
 
-    printf("\nbuffer: %s\n", buf);
-    printf("current position before: %d\n", current_file_descriptor->current_position);
+//    printf("\nbuffer: %s\n", buf);
+//    printf("current position before: %d\n", current_file_descriptor->current_position);
     current_file_descriptor->current_position = (current_file_descriptor->current_position + size) % BLOCK_SIZE;
-    printf("current position after: %d\n", current_file_descriptor->current_position);
-    printf("occupied after: %d\n\n", current_file->last_block->occupied);
+//    printf("current position after: %d\n", current_file_descriptor->current_position);
+//    printf("occupied after: %d\n\n", current_file->last_block->occupied);
 
 
-    return size;
+    return (ssize_t) size;
 }
 
 ssize_t
 ufs_read(int fd, char *buf, size_t size)
 {
+//    TODO: прописать правильную логику, учитывая, что информация может лежать в разных блоках
     if (fd < 0 || fd >= file_descriptor_capacity) {
         ufs_error_code = UFS_ERR_NO_FILE;
         return -1;
@@ -258,6 +260,7 @@ ufs_read(int fd, char *buf, size_t size)
     struct filedesc *current_file_descriptor = file_descriptors[fd];
     struct file *current_file = current_file_descriptor->file;
     struct block *iterator = current_file->block_list;
+    int full_blocks = 0;
 
     size_t remaining_size = size;
     size_t offset = current_file_descriptor->current_position;
@@ -279,6 +282,7 @@ ufs_read(int fd, char *buf, size_t size)
         if (offset == BLOCK_SIZE) {
             offset = 0;
             iterator = iterator->next;
+            full_blocks++;
         }
     }
 
@@ -289,11 +293,14 @@ ufs_read(int fd, char *buf, size_t size)
     if (size < current_file->last_block->occupied - prev_position) {
         current_file_descriptor->current_position += size;
 //        printf("\ncurrent position before: %d\n\n", current_file_descriptor->current_position);
-        return size;
+        return (ssize_t) size;
     }
 
     current_file_descriptor->current_position = current_file->last_block->occupied;
 //    printf("current position after: %d\n\n", current_file_descriptor->current_position);
+    printf("full blocks: %d\n", full_blocks);
+//    printf("\nbuffer: %s\n", buf);
+//    printf("returns: %s\n\n", current_file->last_block->occupied - prev_position);
 
     return current_file->last_block->occupied - prev_position;
 

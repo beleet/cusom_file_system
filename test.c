@@ -96,6 +96,25 @@ test_close(void)
 static void
 test_io(void)
 {
+//    int fd1 = ufs_open("file", UFS_CREATE);
+//
+//    int capacity = 1024;
+//    char buffer[capacity];
+//
+//    for (int i = 0; i < capacity; i++)
+//        buffer[i] = 'a';
+//
+//    ufs_write(fd1, buffer, capacity);
+//
+//    int fd2 = ufs_open("file", 0);
+//
+//    char new_buffer[capacity];
+//
+//    int capacity1 = ufs_read(fd2, new_buffer, 3);
+//    int capacity2 = ufs_read(fd2, new_buffer, 4);
+//
+//    printf("cap1: %d, cap2: %d\n", capacity1, capacity2);
+
     unit_test_start();
 
     ssize_t rc = ufs_write(-1, NULL, 0);
@@ -201,6 +220,7 @@ test_io(void)
             break;
         progress += rc;
     }
+    printf("progress: %d, some_size: %d\n", progress, some_size);
     unit_check(progress == some_size, "read big data in parts");
     ufs_close(fd1);
     bool ok = true;
@@ -446,10 +466,10 @@ main(void)
 {
     unit_test_start();
 
-//    test_open();
-//    test_close();
+    test_open();
+    test_close();
     test_io();
-//    test_delete();
+    test_delete();
 //    test_stress_open();
 //    test_max_file_size();
 //    test_rights();
