@@ -208,7 +208,7 @@ ufs_write(int fd, const char *buf, size_t size)
         }
 
         size_t write_size = (remaining_size > BLOCK_SIZE - offset) ? (BLOCK_SIZE - offset) : remaining_size;
-
+//        printf("write size: %d, current position: %d\n", write_size, current_file_descriptor->current_position);
         memcpy(current_file->last_block->memory + offset, buf + size - remaining_size, write_size);
 
         remaining_size -= write_size;
@@ -218,6 +218,7 @@ ufs_write(int fd, const char *buf, size_t size)
             offset = 0;
             if (current_file->last_block->next == NULL) {
                 current_file->last_block->next = (struct block*) calloc(1, sizeof(struct block));
+                current_file->last_block->next->memory = (char *) calloc(BLOCK_SIZE, sizeof(char));
                 current_file->last_block->next->next = NULL;
             }
             current_file->last_block = current_file->last_block->next;
@@ -228,15 +229,15 @@ ufs_write(int fd, const char *buf, size_t size)
 //    current_file->last_block->occupied = (() + current_file->last_block->occupied) % BLOCK_SIZE;
 
     if (current_file->last_block->occupied < current_file_descriptor->current_position + size)
-        current_file->last_block->occupied = current_file_descriptor->current_position + size;
+        current_file->last_block->occupied = (current_file_descriptor->current_position + size) % BLOCK_SIZE;
 
-//
-//    printf("\nbuffer: %s\n", buf);
-//    printf("current position before: %d\n", current_file_descriptor->current_position);
-    current_file_descriptor->current_position = current_file_descriptor->current_position + size;
-//    printf("current position after: %d\n", current_file_descriptor->current_position);
-//    printf("occupied after: %d\n\n", current_file->last_block->occupied);
-//
+
+    printf("\nbuffer: %s\n", buf);
+    printf("current position before: %d\n", current_file_descriptor->current_position);
+    current_file_descriptor->current_position = (current_file_descriptor->current_position + size) % BLOCK_SIZE;
+    printf("current position after: %d\n", current_file_descriptor->current_position);
+    printf("occupied after: %d\n\n", current_file->last_block->occupied);
+
 
     return size;
 }
@@ -328,8 +329,8 @@ ufs_delete(const char *filename)
     if (desired_file == NULL)
         return -1;
 
-    if (desired_file->refs != 0)
-        return -1;
+//    if (desired_file->refs != 0)
+//        return -1;
 
     struct file *temp = file_list, *prev = NULL;
 
