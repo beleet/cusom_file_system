@@ -51,6 +51,7 @@ static struct file *file_list = NULL;
 struct filedesc {
     struct file *file;
     size_t current_position;
+    struct block *current_block;
 
     /* PUT HERE OTHER MEMBERS */
 };
@@ -95,6 +96,7 @@ int create_file_descriptor(struct file *file) {
 
     new_file_descriptor->file = file;
     new_file_descriptor->current_position = 0;
+    new_file_descriptor->current_block = file->block_list;
 
     //  Initialize the file_descriptors array if its empty
     if (file_descriptor_capacity == 0) {
@@ -192,8 +194,6 @@ ufs_write(int fd, const char *buf, size_t size)
     size_t remaining_size = size;
     size_t offset = current_file_descriptor->current_position;
 
-//    current_file_descriptor->current_position = (current_file_descriptor->current_position + size) % BLOCK_SIZE;
-
     while (remaining_size > 0) {
 
         //  Check if file is empty
@@ -217,11 +217,13 @@ ufs_write(int fd, const char *buf, size_t size)
 
         if (offset == BLOCK_SIZE) {
             offset = 0;
+
             if (current_file->last_block->next == NULL) {
                 current_file->last_block->next = (struct block*) calloc(1, sizeof(struct block));
                 current_file->last_block->next->memory = (char *) calloc(BLOCK_SIZE, sizeof(char));
                 current_file->last_block->next->next = NULL;
             }
+            current_file->last_block->occupied = BLOCK_SIZE;
             current_file->last_block = current_file->last_block->next;
         }
     }
@@ -238,7 +240,6 @@ ufs_write(int fd, const char *buf, size_t size)
     current_file_descriptor->current_position = (current_file_descriptor->current_position + size) % BLOCK_SIZE;
 //    printf("current position after: %d\n", current_file_descriptor->current_position);
 //    printf("occupied after: %d\n\n", current_file->last_block->occupied);
-
 
     return (ssize_t) size;
 }
@@ -258,22 +259,27 @@ ufs_read(int fd, char *buf, size_t size)
     }
 
     struct filedesc *current_file_descriptor = file_descriptors[fd];
-    struct file *current_file = current_file_descriptor->file;
-    struct block *iterator = current_file->block_list;
-    int full_blocks = 0;
+    struct block *iterator = current_file_descriptor->current_block;
+
+    if (iterator == NULL)
+        iterator = current_file_descriptor->file->block_list;
+
+    struct block *prev_iterator = NULL;
+    ssize_t full_blocks = 0;
 
     size_t remaining_size = size;
     size_t offset = current_file_descriptor->current_position;
 
-//    printf("\noccupied: %d\n", current_file->last_block->occupied);
-//    printf("before read: %d, ", current_file_descriptor->current_position);
+
+//    printf("POSITION BEFORE: %d\n", current_file_descriptor->current_position);
+//    printf("BLOCK BEFORE: %s\n", current_file_descriptor->current_block->memory);
 
     while (remaining_size > 0 && iterator != NULL) {
+
         // Сколько байт мы можем прочитать из текущего блока
         size_t read_size = (remaining_size > BLOCK_SIZE - offset) ? (BLOCK_SIZE - offset) : remaining_size;
         // Копируем данные из блока файла в buf
         memcpy(buf + size - remaining_size, iterator->memory + offset, read_size);
-
         // Обновляем оставшийся размер данных и смещение
         remaining_size -= read_size;
         offset += read_size;
@@ -281,32 +287,37 @@ ufs_read(int fd, char *buf, size_t size)
         // Если текущий блок полностью прочитан, переходим к следующему блоку
         if (offset == BLOCK_SIZE) {
             offset = 0;
+            prev_iterator = iterator;
             iterator = iterator->next;
             full_blocks++;
         }
+
     }
 
     size_t prev_position = current_file_descriptor->current_position;
+    current_file_descriptor->current_position = offset;
+    current_file_descriptor->current_block = iterator;
 
-//    printf("\ncurrent position before: %d\n", current_file_descriptor->current_position);
+    ssize_t read_size = 0;
 
-    if (size < current_file->last_block->occupied - prev_position) {
-        current_file_descriptor->current_position += size;
-//        printf("\ncurrent position before: %d\n\n", current_file_descriptor->current_position);
-        return (ssize_t) size;
+    if (current_file_descriptor->current_block == NULL) {
+        read_size = BLOCK_SIZE * (full_blocks - 1) - prev_position + prev_iterator->occupied;
+    }
+    else {
+        if (current_file_descriptor->current_block->next == NULL) {
+            if (offset == 0)
+                read_size = BLOCK_SIZE * (full_blocks) - prev_position;
+            else if (offset == BLOCK_SIZE - 1)
+                read_size = BLOCK_SIZE * (full_blocks) - prev_position + current_file_descriptor->current_block->occupied;
+            else return size - prev_position;
+        }
+        else
+            read_size = BLOCK_SIZE * full_blocks - prev_position + current_file_descriptor->current_block->occupied - (BLOCK_SIZE - offset);
     }
 
-    current_file_descriptor->current_position = current_file->last_block->occupied;
-//    printf("current position after: %d\n\n", current_file_descriptor->current_position);
-    printf("full blocks: %d\n", full_blocks);
-//    printf("\nbuffer: %s\n", buf);
-//    printf("returns: %s\n\n", current_file->last_block->occupied - prev_position);
+    current_file_descriptor->current_position = read_size % BLOCK_SIZE;
 
-    return current_file->last_block->occupied - prev_position;
-
-//    return (current_file_descriptor->current_position - prev_position == 0) ?
-//        current_file->last_block->occupied - prev_position :
-//        current_file_descriptor->current_position - prev_position;
+    return read_size;
 }
 
 int
