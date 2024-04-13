@@ -67,6 +67,8 @@ enum ufs_error_code {
 #endif
 };
 
+void print_file_content_by_blocks(int fd);
+
 /** Get code of the last error. */
 enum ufs_error_code
 ufs_errno();

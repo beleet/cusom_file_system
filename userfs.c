@@ -72,6 +72,21 @@ ufs_errno()
     return ufs_error_code;
 }
 
+void print_file_content_by_blocks(int fd) {
+    // For testing
+
+    struct filedesc *current_file_descriptor = file_descriptors[fd];
+    struct file *current_file = current_file_descriptor->file;
+    struct block *current_block = current_file->block_list;
+
+    int idx = 0;
+
+    while (current_block != NULL) {
+        printf("Block %d: %s\n", idx, current_block->memory);
+        idx++;
+        current_block = current_block->next;
+    }
+}
 
 struct file* search_file(const char* file_name) {
     // Searching file by the file name
